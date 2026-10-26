@@ -308,3 +308,10 @@ test('视频理解按时间窗对齐画面与声音，并只进入外部事件',
   assert.ok(world.includes('videoTime(segment.startSec)'), '画面和转写必须带同一时间范围');
   assert.ok(world.includes("origin: 'external'"), '视频资料只能进入 external 事件');
 });
+
+test('群消息正文明确带群号，避免只依赖未展开的 meta', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  assert.ok(src.includes('【QQ群 ${conv.label}（群号 ${conv.id}） ${sendClock}】'), '群消息正文必须包含群号');
+  assert.ok(src.includes('conv: conv.address'), '事件 meta.conv 仍需保留回复地址');
+});

@@ -1433,7 +1433,7 @@ export class QQWorld implements World {
     try { sendClock = shortTime(this.config.timezone, new Date((ev.time ?? Date.now() / 1000) * 1000)); } catch (e) { this.log.warn('shortTime FAIL ' + String(e)); }
     const senderTag = `${sender.name}(QQ:${sender.userId})`;
     const channelPrefix = conv.kind === 'group'
-      ? `【QQ群 ${conv.label} ${sendClock}】${senderTag}`
+      ? `【QQ群 ${conv.label}（群号 ${conv.id}） ${sendClock}】${senderTag}`
       : `【QQ私聊 ${sendClock} ${senderTag}】`;
     // 把这条消息在 QQ 上的真实身份编号（#message_id）带进上下文：模型据此才能引用/回复
     // 任意一条历史消息（对齐内置 qq world 的 idTag 渲染）。在自己发消息时 qq_send 的返回里

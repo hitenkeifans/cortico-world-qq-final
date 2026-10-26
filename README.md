@@ -289,6 +289,7 @@ interface VoiceProvider {
   - 当前用户好感度会以"关系备忘"形式自动注入对话上下文（受 `affinity.enabled` 控制），bot 据此调节语气分寸。
 
 - **群管理员能力（admin）**：当 bot 账号是群管理员 / 群主时，可在群里执行后台管理操作。功能总开关 `admin.enabled`（默认关，控制台热开启）。开关仅控制是否真正执行，`qq_admin（action=recall/at_all/notice/join_*/title/ban/ban_all/kick）` 工具始终可用（关闭时返回「功能未开启」）。所有操作需要 bot 具备对应管理员权限，否则 QQ 会拒绝（返回具体错误）。
+  - 入站群消息正文会带上群名和群号，格式为 `【QQ群 群名（群号 123456） 时刻】`，方便模型在多群上下文中区分当前会话；事件 `meta.conv` 仍保留 `group:<群号>` 供 `qq_send` 原样回复。
   - 鉴权按当前 QQ 会话最近两分钟内的发言者判断：白名单、群管理员/群主权限和 AI 自主操作分别受 `allowlist`、`allowGroupAdmins`/`ownerOnly`、`allowSelf` 控制；AI 自主踢人还必须开启 `allowSelfKick`，群主和管理员目标继续受保护设置约束。
   - `qq_admin（action=recall）`：撤回一条群消息（`messageId` 为要撤回消息的 `message_id`，仅能撤回近 2 分钟内或自己发的消息）。
   - `qq_admin（action=at_all）`：在群里 **@全体成员** 并附正文（`text`）。需要群开启允许 @全体成员。

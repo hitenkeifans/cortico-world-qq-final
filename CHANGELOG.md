@@ -2,7 +2,7 @@
 
 本文件记录 cortico-world-qq-final 每个版本的改动，供扩展市场的「更新说明」直接读取。
 
-## Unreleased
+## 0.6.28
 
 - 新增发布构建：维护版继续保留可读 `src/`，发布副本使用压缩并改名后的 `dist/index.js`，保留 Cortico、工具、配置和控制台契约名称。
 

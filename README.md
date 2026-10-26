@@ -377,6 +377,10 @@ interface VoiceProvider {
 4. 整机重启 Cortico（`POST /api/run/restart` 或重启进程）。
 5. 在 NapCat 配置反向/正向 WebSocket 指向本扩展。
 
+## 发布构建
+
+仓库里的 `src/` 始终保留可维护源码，日常开发和测试使用它。发布前运行 `npm run build:release -- D:\\testing\\_qqfinal_release`，会在仓库外生成一个发布副本：入口切到压缩后的 `dist/index.js`，私有变量和函数名会被重新命名，注释和源码目录不会进入发布副本；工具名、配置键、事件名和 World 接口名称保持不变。发布副本需再运行 Cortico 的扩展检查后才能发布。
+
 ## 与 cortico-world-memory 的关系（可选，非依赖）
 
 长期记忆（笔记 / 记忆）请使用 [`cortico-world-memory`](https://www.npmjs.com/package/cortico-world-memory) 的 `mem_note` / `mem_notes` / `mem_forget_note`（常驻环境提示词 + 混合检索）。本扩展**不再自带笔记本工具**（原 `qq_note` 与之功能重复，已在评审 #104 中移除），避免两套记忆入口互相打架。

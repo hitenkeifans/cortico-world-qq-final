@@ -49,6 +49,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json",
     "build:console": "node scripts/build-console.mjs",
+    "build:release": "node scripts/build-release.mjs",
     "test": "node --test tests/normalize.test.ts tests/config.test.ts tests/security.test.ts tests/forward.test.ts tests/image-store.test.ts tests/video.test.ts"
   },
   "dependencies": {

@@ -1,11 +1,13 @@
 {
   "name": "cortico-world-qq-final",
-  "version": "0.6.28",
+  "version": "0.6.29",
   "description": "Cortico World 扩展：QQ（OneBot v11 / NapCat）适配器。",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./src/index.ts",
   "files": [
+    "src",
     "dist",
+    "docs",
     "describe.json",
     "README.md",
     "CHANGELOG.md",
@@ -43,6 +45,13 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "build:console": "node scripts/build-console.mjs",
+    "build:release": "node scripts/build-release.mjs",
+    "test": "node --test tests/normalize.test.ts tests/config.test.ts tests/security.test.ts tests/forward.test.ts tests/image-store.test.ts tests/video.test.ts"
   },
   "dependencies": {
     "ws": "^8.18.0"

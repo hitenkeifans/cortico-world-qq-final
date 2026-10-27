@@ -32,7 +32,7 @@ Cortico 的 **QQ（OneBot v11 / NapCat）** World 扩展。以 `fat-fish` 仓库
 | AI 作息（睡眠/午休/活跃） | — | ✅ 增量吸收 | 按真实时间切换三段：睡眠段暂停主动冒泡（被动回复照常）、午休段放缓主动节奏、活跃段正常；时段切换时向可主动说话的会话推送一条播报提示，由主模型决定措辞并调用 qq_send 发出（无第二模型，生成失败才回退兜底文案） |
 | 闹钟 / 记事本 | — | ✅ 新增 | 让智能体把"需要定时做的事 / 约定"记下来（`qq_reminder（action=add）`），到点自动在该会话提醒（`qq_reminder（action=list）` 查、`qq_reminder（action=cancel）` 删）；落盘持久化、跨重启不丢 |
 | 好感度（关系分） | — | ✅ 新增 | 对**每个用户独立**维护一份好感度（-100~100，可正可负、随互动上下浮动，不是只增不减）；`qq_affinity_adjust` 加减、`qq_affinity_get` 查、`qq_affinity_list` 总览；当前用户好感度会**自动注入对话上下文**，影响语气与分寸 |
-| 语音（ASR + TTS） | — | ✅ 新增 | 听语音（ASR 转文字）+ 说语音（TTS）。**供应商可插拔**，内置 `native`（OneBot 原生，零依赖）、`custom`（远程 OpenAI 兼容端点 + API Key）、`local`（本地/自建模型如 VoxCPM2 经 vLLM-Omni，免 Key、慢推理可加超时、支持额外参数透传）；是否说话由语义判定决定，并非每条都念 |
+| 语音（ASR + TTS） | — | ✅ 新增 | 听语音（ASR 转文字）+ 说语音（TTS）。**供应商可插拔**，内置 `native`（OneBot 原生，零依赖）、`custom`（远程 OpenAI 兼容端点 + API Key）、`local`（本地/自建模型如 VoxCPM2 经 vLLM-Omni，免 Key、慢推理可加超时、支持额外参数透传）；是否说话由主模型在 `qq_send.voice` 中决定 |
 
 ## 连接模式
 
@@ -98,12 +98,8 @@ Cortico 的 **QQ（OneBot v11 / NapCat）** World 扩展。以 `fat-fish` 仓库
 | `voice.enabled` | `false` | **语音（ASR+TTS）**开关 |
 | `voice.provider` | `native` | 语音供应商（实现方式）。可选项由 `src/voice.ts` 注册表动态生成：`native`=OneBot 原生 `translate_record`/`tts`（零依赖、开箱即用）；`custom`=用「网址+API Key」对接远程 OpenAI 兼容音频服务（GLM/OpenAI/自建等）；`local`=本地/自建模型（OpenAI 兼容、免 API Key、慢推理可加超时、支持额外参数做声音克隆/设计，如 VoxCPM2 经 vLLM-Omni）；`voxcpm`=本地 VoxCPM2 TTS 服务（自有接口 `GET /health`+`POST /tts`，免 Key、音色用自然语言描述，仅做 TTS、收语音回退 `native` 识别，如 Fat-Fish 的 `vox_tts_server.py`）。新增供应商只需在 `voice.ts` 用 `registerVoiceProvider` 注册 |
 | `voice.asr` | `true` | 开启语音识别（收到语音→转文字） |
-| `voice.tts` | `true` | 开启语音合成（回复时念成语音） |
-| `voice.semanticJudge` | `true` | 是否用 LLM 判断"这条回复要不要念出来"，避免每条都念 |
+| `voice.tts` | `true` | 允许主模型通过 `qq_send.voice=true` 发送语音回复 |
 | `voice.audioFallback` | `true` | 当语音合成失败（如本地模型崩溃/超时）时，是否回退为纯文字发送，而不是吞掉这条回复 |
-| `voice.judgeEndpoint` | `https://api.deepseek.com/v1` | 语义判定所用 OpenAI 兼容 chat 端点（**不绑定任何模型商**，可填你自己的） |
-| `voice.judgeApiKeySecret` | `DEEPSEEK_API_KEY` | 语义判定端点密钥名；值写在部署密钥库（.env）里，由框架 `secret()` 读取 |
-| `voice.judgeModel` | `deepseek-chat` | 语义判定所用 chat 模型名 |
 | `voice.voiceBaseUrl` | `""` | 选 `custom` / `local` 时必填：OpenAI 兼容音频端点基址（远程如 `https://open.bigmodel.cn/api/paas/v4` 或 `https://api.openai.com/v1`；本地如 `http://localhost:8000/v1`）。ASR 走 `{网址}/audio/transcriptions`，TTS 走 `{网址}/audio/speech` |
 | `voice.voiceApiKeySecret` | `VOICE_API_KEY` | `custom` 供应商 API Key 名；值写在部署密钥库（.env）里，由框架 `secret()` 读取。`local` 供应商免 Key，留空即可 |
 | `voice.voiceVoice` | `""` | 音色（仅当所选语音模型支持时填写，如 `tongtong`）；留空用服务商默认 |
@@ -178,7 +174,7 @@ Cortico 的 **QQ（OneBot v11 / NapCat）** World 扩展。以 `fat-fish` 仓库
 ### 开关与基本行为
 
 - `voice.enabled` 总开关；`voice.asr` / `voice.tts` 分别控制收语音转文字 / 发语音。
-- **语义判定**：`voice.semanticJudge`（默认开）用 LLM 判断"这条回复要不要念出来"，避免每条都念。判定走独立的 `judgeEndpoint`/`judgeApiKeySecret`/`judgeModel`（**不绑定任何模型商**，可填你自己的 chat 端点）。关闭则"要发语音的回复一律念"。
+- **语音选择**：不再调用额外的语义判定模型。主模型结合当前上下文决定是否发语音；对方明确要求语音、朗读或用声音回复，或语境明显需要语音时，调用 `qq_send` 并设置 `voice=true`，普通回复省略该参数或设为 `false`。
 - **失败回退**：`voice.audioFallback`（默认开）——当语音合成失败时（本地模型崩了 / 超时 / 端点挂了），回退为纯文字发送，而不是吞掉这条回复。
 
 ### 供应商（实现方式）
@@ -238,7 +234,7 @@ python vox_tts_server.py --host 127.0.0.1 --port 8765
 
 行为要点：
 
-- **TTS**：语义判定认为该念语音时，把文本 `POST /tts` 拿到 WAV，作为 `record` 语音段发出；若服务未就绪（`/health` 返回 `{ready:false}` 或 `state` 非 `ready`，例如刚启动还在加载模型）或合成失败，自动**回退文字**，不阻塞消息。
+- **TTS**：主模型在 `qq_send` 中设置 `voice=true` 时，把文本 `POST /tts` 拿到 WAV，作为 `record` 语音段发出；若服务未就绪（`/health` 返回 `{ready:false}` 或 `state` 非 `ready`，例如刚启动还在加载模型）或合成失败，自动**回退文字**，不阻塞消息。
 - **ASR（收语音）**：VoxCPM2 服务不含语音识别，`voxcpm` 供应商的收语音**回退到 `native`**（即 NapCat 的 `translate_record`）。若想用本地模型识别，改用 `asr.mode='local'`（见「语音识别（ASR 共享）」配置组）。
 - 与 `local` 区别：`local` 走 OpenAI 兼容 `/audio/speech`（适合 VoxCPM2 经 vLLM-Omni 的场景）；`voxcpm` 走上述自有 `/tts` 接口（适合已有一个独立 TTS 服务的场景）。按你本地实际部署选其一。
 
@@ -274,8 +270,8 @@ interface VoiceProvider {
 - 群聊发言限速 / 话题防死循环在 `qq_send` 发送环节统一生效：当某群达到窗口上限，或某会话 bot 连续发言超限/对方久未接话时，`qq_send` 会返回「未能发送：…（发言频率已达上限 / 话题自动收尾）」而不是真正发出。这是正常节流，不是报错。
 - **语音工具 / 命令**：
   - 收语音：QQ 语音消息经 `voice.provider` 指定的 ASR 后（如 `native` 的 `translate_record`、或 OpenAI 兼容 `/audio/transcriptions`）转成文字进入对话；SILK 等编码能否被识别取决于所选供应商（QQ 语音多为 SILK，`native` 由 NapCat 服务端解码最稳，`custom`/`local` 一般要 wav/mp3/flac）。
-  - 说语音：`voice.tts` 开启且语义判定认为该念时，回复文字经 TTS 合成成语音段（如 `native` 的 `tts` 或 OpenAI 兼容 `/audio/speech`，`local` 可透传 `voiceExtraTts` 做声音克隆/设计）发出；失败且 `voice.audioFallback` 开启时回退文字。
-  - 运行时命令（聊天里即时生效，优先级高于控制台配置）：`/语音 开` / `/语音 关`（整体开关）、`/语音 asr 开|关`、`/语音 tts 开|关`、`/语音 判定 开|关`、`/语音 状态`（查看当前开关与所选供应商）。开关为运行时内存态，整机重启回到控制台 `voice.*` 默认值。
+  - 说语音：`voice.tts` 开启且主模型在 `qq_send` 中设置 `voice=true` 时，回复文字经 TTS 合成成语音段（如 `native` 的 `tts` 或 OpenAI 兼容 `/audio/speech`，`local` 可透传 `voiceExtraTts` 做声音克隆/设计）发出；失败且 `voice.audioFallback` 开启时回退文字。
+  - 运行时命令（聊天里即时生效，优先级高于控制台配置）：`/语音 开` / `/语音 关`（整体开关）、`/语音 asr 开|关`、`/语音 tts 开|关`、`/语音 状态`（查看当前开关与所选供应商）。是否发送语音由主模型在 `qq_send.voice` 中决定。
 - **情绪系统（移植自 fat-fish `emotion.py`）**：
   - 每轮用户发言后，由 LLM 抽取本次心情变化（情绪/强度/起因），维护**全局一份**心情状态（多情绪叠加、自然衰减、主导情绪冷却）。
   - 把当前心情提示词（心情值 + 主导情绪 + 行为引导）注入 **Cortico 全局上下文**（`ENV_PROMPT.md` 的 `{{qq.emotion}}`），让模型在回复中带上情绪质感。
@@ -343,7 +339,7 @@ interface VoiceProvider {
 
 首次接入、不知道从哪下手的话，看这份图文教程（含逐步截图）：
 
-**[→ 桌宠接入 QQ 图文教程](docs/index.html)**
+**[→ 桌宠接入 QQ 图文教程](https://unpkg.com/cortico-world-qq-final@0.6.29/docs/index.html)**
 
 要点速记：
 
@@ -361,8 +357,8 @@ interface VoiceProvider {
 - **配置组「QQ · 连接与监听」**：在控制台编辑连接参数与监听名单（热保存，连接类需重启）。
 - **配置组「QQ 空间动态」**：在控制台开关空间功能、调人设/概率/配额/附图模式（热保存）。
 - **面板「QQ 空间动态」状态灯**：显示是否开启、今日已发/配额、待回评数徽章。
-- **配置组「QQ · 语音（ASR/TTS）」**：在控制台切换供应商（`native`/`custom`/`local`）、开/关收发语音、调语义判定与回退、填模型网址/API Key/音色/ASR/TTS 模型名/超时/额外参数（热保存，改完一般即时生效；部分连接类无需重启）。
-- **状态灯「语音」**：显示语音总开关、所选供应商、ASR/TTS/语义判定各自的开关状态。
+- **配置组「QQ · 语音（ASR/TTS）」**：在控制台切换供应商（`native`/`custom`/`local`）、开/关收发语音、调回退、填模型网址/API Key/音色/ASR/TTS 模型名/超时/额外参数（热保存，改完一般即时生效；部分连接类无需重启）。
+- **状态灯「语音」**：显示语音总开关、所选供应商、ASR/TTS 状态；是否发语音由主模型调用 `qq_send` 时的 `voice` 参数决定。
 - **状态灯「群聊限速/防死循环」**：显示群发言限速（窗口/上限）与防死循环（连续上限/静默收尾）的当前配置。
 - **徽章「群限速」「防死循环」**：控制台顶栏实时显示两者开关与阈值。
 

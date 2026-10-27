@@ -339,7 +339,7 @@ interface VoiceProvider {
 
 首次接入、不知道从哪下手的话，看这份图文教程（含逐步截图）：
 
-**[→ 桌宠接入 QQ 图文教程](https://unpkg.com/cortico-world-qq-final@0.6.29/docs/index.html)**
+**[→ 桌宠接入 QQ 图文教程](https://cdn.jsdelivr.net/gh/hth768/cortico-world-qq-final@main/docs/index.html)**
 
 要点速记：
 

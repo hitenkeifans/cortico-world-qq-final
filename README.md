@@ -55,6 +55,7 @@ Cortico 的 **QQ（OneBot v11 / NapCat）** World 扩展。以 `fat-fish` 仓库
 | `maxMessageBytes` | `1500` | 长文本强制分片字节数 |
 | `deliverImageAttachments` | `true` | 图片作为模型附件（需模型支持图像）。这是默认的看图路径 |
 | `imageDir` | `images` | 独立图片库目录（相对扩展或绝对路径），与 `emojiDir` 分开；保存的图片用 `[图片:文件名]` 发送 |
+| `fileDir` | `files` | 普通文件资料库目录（相对扩展或绝对路径），与 `emojiDir` / `imageDir` 分开；收到的文件按内容哈希保存 |
 | `imageTransport` | `auto` | 图片/表情包发送方式：`auto` 按协议端地址判断，远程 NapCat/SnowLuma 自动用 `base64://`；也可强制 `path` 或 `base64` |
 | `vision.enabled` | `false` | 辅助视觉：用另一个 VLM 描述图片。主模型本身能看图时不必开（两条路会重复花钱） |
 | `vision.endpoint` / `vision.apiKeySecret` / `vision.model` | `""` | 开启辅助视觉后**三项必填**。密钥只写名字（如 `DEEPSEEK_API_KEY`），值放在部署密钥库（.env）里，由框架 `secret()` 读取 |
@@ -321,6 +322,8 @@ interface VoiceProvider {
 
 - `qq_image`：独立图片资料库。`save` 只能从最近收到的 QQ 图片中选择一张保存；`list` 查看真实文件名和标注；`tag` 修改名称/主题标签/使用场景；`delete` 删除图片。图片库使用独立的 `imageDir`（默认 `<扩展>/images`），不会写入表情包的 `emojiDir`。保存时可选用视觉模型自动生成短标签，所有标签都会清洗为单行资料文本，不会推送成内部事件。
 - 图片库发送：先用 `qq_image(action=list)` 获取真实文件名，再在 `qq_send` 正文写 `[图片:文件名]`。文件名会重新经过目录边界和符号链接检查，不接受任意 URL 或目录外路径。
+- `qq_file`：普通文件资料库。收到 OneBot 文件消息或 `group_upload` / `private_file` 通知时，若协议端提供公开 HTTP(S) 下载地址，就把文件保存到独立 `fileDir`（默认 `<扩展>/files`），文件名由内容哈希生成；协议端只提供文件 ID 时会尝试调用 `get_group_file_url` / `get_private_file_url`。下载地址拒绝 `file://`、本机和常见内网地址，原始文件名只作为清洗后的资料字段保存，不进入内部事件指令。
+- 文件库操作：`qq_file(action=list)` 查看哈希文件名和标注，`tag` 修改资料标签，`delete` 删除本地文件，`send` 配合事件 `meta.conv` 把库内文件发送到监听群或私聊。发送只接受 list 返回的固定文件名，并再次检查目录和符号链接；本机协议端直接使用 `upload_group_file` / `upload_private_file`，远程 SnowLuma 会先用 `upload_file_stream` 把文件分块传到协议端再发送，协议端不支持时会返回失败原因。
 
 - `qq_sticker_stats`：查看已自动收藏的表情包统计——总数（及其中已同步到 QQ 收藏表情的张数）、按情感分布、最近若干条（含情感/用处/标签/文件名）。想给 QQ 回复发表情包图片时，**先调本工具拿到真实文件名**（返回里形如 `[表情包:xxx.jpg]`），再把整段 `[表情包:文件名]` 写进回复文本即可自动发出；不要编造不存在的文件名。
 - `qq_sticker_to_favorites`：把已收藏但还没进 QQ 收藏表情的表情包（开启开关前攒下的历史表情）批量补推到登录账号的 QQ「收藏表情」（custom face），让你能在 QQ 客户端里直接看到/使用。需先在设置开启「同步到 QQ 收藏表情」，且协议端支持 `add_custom_face`（如 SnowLuma）。

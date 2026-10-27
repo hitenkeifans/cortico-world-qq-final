@@ -32,6 +32,8 @@ export interface OneBotMessage {
   notice_type?: string;
   operator_id?: number;
   comment?: string;
+  /** group_upload / 扩展文件事件的元数据；仅作资料，不作为内部指令。 */
+  file?: { id?: string; file_id?: string; name?: string; size?: number; busid?: number | string; url?: string; file?: string; path?: string };
   flag?: string;
   // meta
   meta_event_type?: string;

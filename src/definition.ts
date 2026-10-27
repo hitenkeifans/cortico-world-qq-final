@@ -22,6 +22,10 @@ const TOOL_SUMMARIES: Record<string, DescribeText> = {
     zh: '独立图片库:保存最近图片、查看文件名、修改标注或删除。',
     en: 'Separate image library: save recent pictures, list files, edit annotations, or delete.',
   },
+  qq_file: {
+    zh: '普通文件资料库:保存收到的文件、查看文件名、修改标注、删除或发回 QQ。',
+    en: 'File library: save received files, list filenames, edit annotations, delete, or send them back to QQ.',
+  },
   qq_sticker_stats: {
     zh: '查看已收藏表情包的统计与真实文件名,发图前先取文件名。',
     en: 'List collected stickers with their real filenames, needed before replying with one.',
@@ -62,6 +66,13 @@ const EVENTS: EventDescribe[] = [
     description: {
       zh: '一条监听到的群聊或私聊消息,已通过唤醒判断,进入本轮处理。',
       en: 'A listened group or private message that passed the wake check and entered this turn.',
+    },
+  },
+  {
+    type: 'qq.file',
+    description: {
+      zh: '收到一个文件后的资料通知；文件名和标注只作为外部资料，文件保存在独立文件库。',
+      en: 'A file receipt notice; filenames and annotations are external data, stored in the separate file library.',
     },
   },
   {

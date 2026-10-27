@@ -66,6 +66,8 @@ export interface QQWorldConfig {
   emojiDir: string;
   /** 本地图片库目录（相对扩展或绝对路径），与 emojiDir 分开，供发送 `[图片:文件名]` 标记使用。 */
   imageDir: string;
+  /** 普通文件资料库目录（相对扩展或绝对路径），与 emojiDir/imageDir 分开。 */
+  fileDir: string;
   /** 图片发送传输方式：auto=按协议端地址判断，path=本地路径，base64=内联传输。 */
   imageTransport: 'auto' | 'path' | 'base64';
   /** 是否把图片作为附件交给模型（需要模型支持图像）。 */
@@ -286,6 +288,7 @@ export const QQ_DEFAULTS: QQWorldConfig = {
   forwardByMessageId: false,
   emojiDir: 'emoji',
   imageDir: 'images',
+  fileDir: 'files',
   imageTransport: 'auto',
   deliverImageAttachments: true,
   splitReplyBySentence: true,
@@ -460,6 +463,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
       'worlds.qqbot.deliverImageAttachments': { type: 'boolean', title: '图片作为模型附件', 'x-hot': true, description: '开启时把收到的图片直接作为附件喂给主模型（主模型需支持看图）。这是默认的看图路径；「辅助视觉」是另一条用独立 VLM 描述图片的路，两条同时开会重复花钱，主模型能看图时就留着这个、关掉辅助视觉。' },
       'worlds.qqbot.emojiDir': { type: 'string', title: '表情包目录', 'x-hot': false, description: '本地表情包图片目录（相对扩展或绝对路径），供发送 [表情包:文件名] 标记。' },
       'worlds.qqbot.imageDir': { type: 'string', title: '图片库目录', 'x-hot': false, description: '本地图片库目录（相对扩展或绝对路径），与表情包目录分开，供发送 [图片:文件名] 标记。' },
+      'worlds.qqbot.fileDir': { type: 'string', title: '文件库目录', 'x-hot': false, description: '收到的普通文件保存目录（相对扩展或绝对路径），与表情包和图片库分开；默认 files。' },
       'worlds.qqbot.imageTransport': { type: 'string', title: '图片发送方式', enum: ['auto', 'path', 'base64'], 'x-hot': false, description: 'auto=本机协议端用路径、远程协议端自动改用 base64；path=始终发送本地路径；base64=始终内联图片。远程 NapCat/SnowLuma 建议用 auto 或 base64。' },
       'worlds.qqbot.splitReplyBySentence': { type: 'boolean', title: '按句拆分发送', 'x-hot': true, description: '开启后回复按句标拆成多条消息（对齐 fat-fish）。' },
       'worlds.qqbot.forwardByMessageId': { type: 'boolean', title: '允许按消息 id 合并转发', 'x-hot': false, description: '开启后可使用 qq_forward_by_id 工具：把本 bot 已接收或已发出的多条消息，用 send_forward_msg 合成「一张合并转发卡片」发出（卡片由本 bot 发出，node 身份只能是 bot 自己；卡片内每条消息用文本标注原始发送者昵称+QQ号并保留原文内容，不伪造任何身份）。需要协议端支持 send_forward_msg 与 get_msg（NapCat/Lagrange/SnowLuma 等 OneBot v11 实现大多支持）。只能转发本 bot 见过的消息（message id 必须在本地记录内），无法转发从未见过的消息。' },
@@ -657,6 +661,7 @@ export function normalizeConfig(raw: QQConfigSection): QQWorldConfig {
   if (typeof c.deliverImageAttachments !== 'boolean') c.deliverImageAttachments = QQ_DEFAULTS.deliverImageAttachments;
   if (typeof c.emojiDir !== 'string' || !c.emojiDir) c.emojiDir = QQ_DEFAULTS.emojiDir;
   if (typeof c.imageDir !== 'string' || !c.imageDir) c.imageDir = QQ_DEFAULTS.imageDir;
+  if (typeof c.fileDir !== 'string' || !c.fileDir) c.fileDir = QQ_DEFAULTS.fileDir;
   if (c.imageTransport !== 'auto' && c.imageTransport !== 'path' && c.imageTransport !== 'base64') c.imageTransport = QQ_DEFAULTS.imageTransport;
   if (typeof c.timezone !== 'string' || !c.timezone) c.timezone = QQ_DEFAULTS.timezone;
   if (typeof c.mode !== 'string') c.mode = 'reverse';

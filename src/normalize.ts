@@ -104,7 +104,9 @@ export function renderIncoming(
         out.push('[视频]');
         break;
       case 'file':
-        out.push(`[文件：${seg.data.name ?? seg.data.file}]`);
+        // 文件名来自外部消息，不能原样拼进提示词；world 会在成功落盘后补充
+        // 由内容哈希生成的固定文件名，未能下载时只保留中性占位。
+        out.push('[文件]');
         break;
       case 'forward':
         out.push('[合并转发消息]');
@@ -148,7 +150,7 @@ export function renderSegmentsPlain(segments: OneBotSegment[] | string | undefin
         case 'video':
           return '[视频]';
         case 'file':
-          return `[文件:${seg.data.name ?? ''}]`;
+          return '[文件]';
         case 'forward':
           return '[合并转发]';
         default:

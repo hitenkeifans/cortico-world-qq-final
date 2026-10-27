@@ -354,3 +354,18 @@ test('群消息正文明确带群号，避免只依赖未展开的 meta', async 
   assert.ok(src.includes('【QQ群 ${conv.label}（群号 ${conv.id}） ${sendClock}】'), '群消息正文必须包含群号');
   assert.ok(src.includes('conv: conv.address'), '事件 meta.conv 仍需保留回复地址');
 });
+test('普通文件资料只作为外部资料，并限制下载与发送边界', async () => {
+  const fs = await import('node:fs');
+  const world = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  const store = fs.readFileSync(new URL('../src/file-store.ts', import.meta.url), 'utf8');
+  const start = world.indexOf('private async handleNotice');
+  const notice = world.slice(start, world.indexOf('\n  /** 从文本或显式 hint', start));
+  assert.ok(notice.includes("t === 'group_upload'"), '必须处理群文件通知');
+  assert.ok(notice.includes("origin: 'external'"), '文件通知必须是 external 事件');
+  assert.ok(notice.includes('收到一个文件'), '通知文本只应描述收到文件的事实');
+  assert.ok(!notice.includes('ev.file.name'), '文件原名不得拼进事件指令文本');
+  assert.ok(store.includes('isPublicHttpUrl'), '文件下载必须有公开地址校验');
+  assert.ok(store.includes('file-${hash.slice(0, 16)}'), '文件名必须由内容哈希生成');
+  assert.ok(world.includes('upload_file_stream'), '远程协议端发送应先使用流式上传');
+  assert.ok(world.includes('upload_group_file') && world.includes('upload_private_file'), '群聊和私聊发送必须分别调用文件上传接口');
+});

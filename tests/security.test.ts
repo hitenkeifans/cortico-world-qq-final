@@ -111,6 +111,13 @@ test('反向连接拒绝无鉴权的对外监听', async () => {
   assert.ok(src.includes('拒绝启动'), '无 token 且对外监听时应拒绝启动');
 });
 
+test('反向 WS 端口冲突不应让宿主 core 退出', async () => {
+  const fs = await import('node:fs');
+  const world = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  assert.ok(/try\s*\{\s*await this\.driver\.start\(\);\s*\}\s*catch/.test(world), 'World 启动连接必须捕获监听失败');
+  assert.ok(world.includes('QQ 连接启动失败，World 将继续运行'), '端口冲突时应保留 World 而不是退出宿主');
+});
+
 test('反向服务端必须接受 OneBot 标准的 Authorization: Bearer 头', async () => {
   // 回归：早期实现只从 query 读 token（?access_token= / ?token=），
   // 而 OneBot v11 的约定是请求头 Authorization: Bearer <token>
@@ -280,6 +287,14 @@ test('引用图片必须进入当前事件附件或辅助视觉路径', async ()
   assert.ok(body.includes('qq-quoted-image'), '引用图片附件应使用固定资料名称');
   assert.ok(body.includes('this.vision.register'), '主模型无法看图时应尝试辅助视觉');
   assert.ok(body.includes('^https?:\\/\\/'), '引用图片 URL 必须限制为 http(s)');
+});
+
+test('远程协议端的图片发送支持 base64 内联', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/normalize.ts', import.meta.url), 'utf8');
+  assert.ok(src.includes("imageTransport: 'path' | 'base64'"), '图片构建器必须接受传输方式');
+  assert.ok(src.includes('base64://${readFileSync(file).toString(\'base64\')}'), 'base64 模式必须内联文件内容');
+  assert.ok(src.includes("readFileSync, realpathSync"), 'base64 模式必须读取已通过目录边界校验的文件');
 });
 
 test('qq_admin 的授权辅助逻辑必须与合并工具一起存在', async () => {

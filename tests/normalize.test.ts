@@ -14,6 +14,7 @@ test('normalizeConfig 补全缺省值且保持对象引用身份（x-hot 生效�
   assert.deepEqual(out.privates, []);
   assert.equal(out.sentencesPerMessage, 1);
   assert.equal(out.splitReplyBySentence, true);
+  assert.equal(out.imageTransport, 'auto');
   // vision 子对象原地合并，仍为同一引用
   assert.ok(out.vision);
 });

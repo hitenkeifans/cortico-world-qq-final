@@ -55,6 +55,7 @@ Cortico 的 **QQ（OneBot v11 / NapCat）** World 扩展。以 `fat-fish` 仓库
 | `maxMessageBytes` | `1500` | 长文本强制分片字节数 |
 | `deliverImageAttachments` | `true` | 图片作为模型附件（需模型支持图像）。这是默认的看图路径 |
 | `imageDir` | `images` | 独立图片库目录（相对扩展或绝对路径），与 `emojiDir` 分开；保存的图片用 `[图片:文件名]` 发送 |
+| `imageTransport` | `auto` | 图片/表情包发送方式：`auto` 按协议端地址判断，远程 NapCat/SnowLuma 自动用 `base64://`；也可强制 `path` 或 `base64` |
 | `vision.enabled` | `false` | 辅助视觉：用另一个 VLM 描述图片。主模型本身能看图时不必开（两条路会重复花钱） |
 | `vision.endpoint` / `vision.apiKeySecret` / `vision.model` | `""` | 开启辅助视觉后**三项必填**。密钥只写名字（如 `DEEPSEEK_API_KEY`），值放在部署密钥库（.env）里，由框架 `secret()` 读取 |
 | `vision.videoEnabled` | `false` | 视频理解开关；开启后把收到的视频保存到独立 `videoDir`，用 ASR 配置里的 ffmpeg 抽帧拼图 |
@@ -391,6 +392,7 @@ interface VoiceProvider {
 - 群成员名片为空时尝试补一次 `get_group_member_info`，但离线名片仍以 NapCat 推送为准。
 - 引用回复走实时 `get_msg`（与 fat-fish 一致），需要 NapCat 暴露该 API；引用库外消息也能正确拉取。
 - 表情包图片通过 `[表情包:文件名]` 发送，文件需放在 `emojiDir` 配置目录（默认 `<扩展>/emoji`）。文件名会先精确匹配；漏写或写错 `.gif`/`.png`/`.jpg`/`.jpeg`/`.webp` 扩展名时会自动尝试修正，仍找不到则该标记被丢弃，不报错。
+- 远程协议端（NapCat/SnowLuma 不在桌宠本机）发送表情包或图片时，`imageTransport=auto` 会把本地文件内联为 `base64://`，避免协议端因无法读取桌面端路径而报 `ENOENT`；同机部署可继续使用本地路径。
 - 中文表情名（如 `[旺柴]`/`[笑哭]`）按 fat-fish 的 `FACE_MAP` 映射到 face id；未知方括号文本原样保留。
 - 系统表情标记 `[表情22：白眼]` / `[表情22:白眼]`（数字为 QQ face id，支持全角/半角冒号与可选空格）会被解析成真正的 `face` 段发送。早期版本只认半角冒号，bot 照着入站的全角冒号写法输出时会变成"不存在的表情"文本，已于 0.1.8 修复。
 - 辅助视觉默认关闭。开启需自备一个 OpenAI 兼容 VLM 服务：在配置里填好 `vision.endpoint` / `vision.apiKeySecret` / `vision.model` 三项（密钥值放部署密钥库）。注意这与默认开启的「图片作为模型附件」是**两条看图的路**，同时开会重复花钱——主模型本身能看图时，关掉辅助视觉即可。

@@ -30,6 +30,11 @@ function videoTime(sec: number): string {
   const s = total % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
+
+function isLoopbackHost(host: string): boolean {
+  const h = host.trim().toLowerCase().replace(/^\[|\]$/g, '');
+  return h === '' || h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
 import { type Conv, type OneBotMessage, type OneBotSegment, type QQIdentity, type QQSenderBrief } from './types.ts';
 import { Vision } from './vision.ts';
 import { VideoStore } from './video.ts';
@@ -354,7 +359,15 @@ export class QQWorld implements World {
     );
     this.syncConfigRoster();
     this.driver = this.createDriver();
-    await this.driver.start();
+    try {
+      await this.driver.start();
+    } catch (e) {
+      // 端口冲突、权限错误或远程协议端不可达时，不能让一个 QQ World 让整个 Coopanion core 退出。
+      // 保留 driver 供控制台的「重启连接」使用，并继续初始化其余能力。
+      this.connected = false;
+      this.log.error('QQ 连接启动失败，World 将继续运行；请检查连接模式、地址和端口后重启连接', { err: String(e) });
+      try { await this.driver.stop(); } catch (stopError) { this.log.warn('清理失败的 QQ 连接时出错', { err: String(stopError) }); }
+    }
     this.loadState();
     this.initProactive();
     this.initQzone();
@@ -1830,6 +1843,17 @@ export class QQWorld implements World {
     this.botStreak.set(address, (this.botStreak.get(address) ?? 0) + 1);
   }
 
+  /** 判断图片段是否需要内联，避免远程 NapCat/SnowLuma 访问不到桌面端本地路径。 */
+  private outgoingImageTransport(): 'path' | 'base64' {
+    if (this.config.imageTransport === 'path' || this.config.imageTransport === 'base64') return this.config.imageTransport;
+    if (this.config.mode === 'reverse') return isLoopbackHost(this.config.wsHost) ? 'path' : 'base64';
+    try {
+      return isLoopbackHost(new URL(this.config.wsUrl).hostname) ? 'path' : 'base64';
+    } catch {
+      return 'base64';
+    }
+  }
+
   /** 统一记录 OneBot 返回的 message_id，供引用回复和合并转发使用。 */
   private rememberSentMessage(address: string, response: unknown, ids?: string[]): void {
     if (!response || typeof response !== 'object') return;
@@ -1887,7 +1911,7 @@ export class QQWorld implements World {
       }
     }
 
-    const outgoing = buildOutgoing(text, this.emojiDirAbs, this.imageDirAbs);
+    const outgoing = buildOutgoing(text, this.emojiDirAbs, this.imageDirAbs, this.outgoingImageTransport());
     if (atQQs && atQQs.length) {
       for (const qq of atQQs) outgoing.unshift({ type: 'at', data: { qq } });
     }

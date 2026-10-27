@@ -381,10 +381,16 @@ export class OneBotDriver {
       this.client = null;
     }
     if (this.server) {
-      await new Promise<void>((resolve) => {
-        this.server!.close(() => resolve());
-      });
+      const server = this.server;
       this.server = null;
+      // 端口冲突时底层 Server 从未进入 listening；此时等待 close 回调可能永远不返回，
+      // 进而让「重启连接」卡住。未监听的 server 直接尽力关闭即可。
+      const underlying = (server as unknown as { _server?: { listening?: boolean } })._server;
+      if (!underlying || underlying.listening !== false) {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      } else {
+        try { server.close(); } catch { /* already closed / never started */ }
+      }
     }
   }
 }

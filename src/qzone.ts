@@ -7,6 +7,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { isIP } from 'node:net';
 import type { Logger } from 'cortico/core/types.ts';
 import type { QQApi } from './types.ts';
 import type { QQIdentity } from './definition.ts';
@@ -60,6 +61,28 @@ interface QZoneState {
 }
 
 export type QZonePostResult = { ok: true; tid?: string; text?: string } | { ok: false; error: string };
+
+/** 模型提供的远程附图只允许访问公开 HTTP(S) 地址，拒绝本机、私网和云元数据地址。 */
+function isPublicImageUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    if (u.username || u.password) return false;
+    const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    if (!host || host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.lan')) return false;
+    const ipKind = isIP(host);
+    if (ipKind === 4) {
+      const p = host.split('.').map(Number);
+      const [a, b] = p;
+      if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || a >= 224) return false;
+    } else if (ipKind === 6 && (host === '::1' || host.startsWith('fc') || host.startsWith('fd') || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb'))) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** get_qzone_msg_detail 返回的单条评论/回复（已规整、剥内联 @ 标记）。 */
 export interface QZoneCommentItem {
@@ -313,7 +336,7 @@ export class QZonePoster {
     return urls.filter(
       (u) =>
         typeof u === 'string' &&
-        (/^https?:\/\//.test(u) || /^base64:\/\//.test(u) || /^data:image\//i.test(u)),
+        (isPublicImageUrl(u) || /^base64:\/\//.test(u) || /^data:image\//i.test(u)),
     );
   }
 

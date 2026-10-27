@@ -1,11 +1,13 @@
 import type { ToolDef, WorldHost } from 'cortico/core/types.ts';
 import { shortTime } from 'cortico/core/util.ts';
+import { externalDataBlock } from './external-data.ts';
 
 export interface HistoryCtx {
   getHost: () => WorldHost | null;
   sourceId: string;
   timezone: string;
   convLabel: (address: string) => string;
+  isListened: (address: string) => boolean;
 }
 
 /** 群聊历史查询工具（Cortico 内置 world 的可增量特性）。 */
@@ -40,6 +42,7 @@ export function makeHistoryTools(ctx: HistoryCtx): ToolDef[] {
             const peer = typeof args.peer === 'number' ? args.peer : Number(args.peer ?? 0);
             const address = group ? `group:${group}` : peer ? `private:${peer}` : '';
             if (!address) return '请提供 group 或 peer。';
+            if (!ctx.isListened(address)) return '只能查询当前监听名单内的群或私聊，避免读取未授权会话。';
             const limit = Math.min(Number(args.limit ?? 30), 100);
             const minutes = Number(args.minutes ?? 60);
             const fromTs = new Date(Date.now() - minutes * 60_000).toISOString();
@@ -53,19 +56,23 @@ export function makeHistoryTools(ctx: HistoryCtx): ToolDef[] {
             const lines = events.map(
               (e) => `[${shortTime(ctx.timezone, new Date(e.ts))}] ${e.senderKey ?? ''} ${e.text}`,
             );
-            return `${label} 最近消息：\n${lines.join('\n')}`;
+            return externalDataBlock(`QQ 历史资料（${label}）`, `${label} 最近消息：\n${lines.join('\n')}`);
           }
           case 'search': {
             const keyword = String(args.keyword ?? '').trim();
             if (!keyword) return '请提供 keyword。';
             const limit = Math.min(Number(args.limit ?? 10), 30);
-            const hits = host.store.grep({ keyword, source: ctx.sourceId, limit, context: 1 });
+            const hits = host.store
+              .grep({ keyword, source: ctx.sourceId, limit: limit * 2, context: 1 })
+              .map((h) => ({ ...h, events: h.events.filter((e) => ctx.isListened(e.senderKey ?? '')) }))
+              .filter((h) => h.events.length)
+              .slice(0, limit);
             if (!hits.length) return `没有找到包含「${keyword}」的 QQ 消息。`;
             const blocks = hits.map((h) => {
               const lines = h.events.map((e) => `[${shortTime(ctx.timezone, new Date(e.ts))}] ${e.senderKey ?? ''} ${e.text}`);
               return lines.join('\n');
             });
-            return `检索「${keyword}」命中 ${hits.length} 处：\n\n${blocks.join('\n\n')}`;
+            return externalDataBlock(`QQ 历史检索资料（关键词：${keyword}）`, `检索「${keyword}」命中 ${hits.length} 处：\n\n${blocks.join('\n\n')}`);
           }
           default:
             return `未知 action：「${action}」（支持 recent/search）。`;

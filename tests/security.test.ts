@@ -99,7 +99,8 @@ test('表情包文件名解析不得逃出表情包目录', async () => {
 test('QQ空间附图只接受 http(s) 与 base64，拒绝 file://', async () => {
   const fs = await import('node:fs');
   const src = fs.readFileSync(new URL('../src/qzone.ts', import.meta.url), 'utf8');
-  assert.ok(src.includes('^https?:\\/\\/'), '应过滤为 http(s) 白名单');
+  assert.ok(src.includes('isPublicImageUrl'), '应经过公开地址校验');
+  assert.ok(src.includes('localhost') && src.includes('192 && b === 168'), '应拒绝本机和常见私网地址');
   assert.ok(src.includes('base64:\\/\\/'), '应允许 base64://');
   assert.ok(!/images[^\n]*file:\/\//.test(src), '不应再把 file:// 当作受支持的附图协议');
 });
@@ -273,6 +274,29 @@ test('加群申请事件不得把申请留言拼进 internal 提示词', async (
   assert.ok(!textLine.includes('comment'), '事件文本不得引用申请留言');
   assert.ok(!textLine.includes('留言'), '事件文本不得出现留言原文');
   assert.ok(textLine.includes('qq_admin（action=join_list）'), '应引导模型用管理工具查询详情');
+  assert.ok(src.includes('申请留言已省略，外部原文不作为模型指令'), '待审列表不得把外部留言原文直接交给模型');
+});
+
+test('历史和空间查询结果必须标成外部资料', async () => {
+  const fs = await import('node:fs');
+  const history = fs.readFileSync(new URL('../src/history-tools.ts', import.meta.url), 'utf8');
+  const world = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  assert.ok(history.includes('externalDataBlock'), '历史消息必须标成外部资料');
+  assert.ok(history.includes('isListened'), '历史查询必须限制在监听会话');
+  assert.ok(world.includes("externalDataBlock('QQ 空间动态资料'"), '空间动态列表必须标成外部资料');
+  assert.ok(world.includes("externalDataBlock('QQ 空间动态和评论资料'"), '空间动态详情必须标成外部资料');
+});
+
+test('提醒事件不得把用户提供的提醒文本拼进 internal 指令', async () => {
+  const fs = await import('node:fs');
+  const world = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  const start = world.indexOf('private async checkReminders');
+  const end = world.indexOf('\n  private async reloadIdentity', start);
+  assert.ok(start > 0 && end > start, '必须存在提醒处理器');
+  const body = world.slice(start, end);
+  assert.ok(body.includes("origin: 'external'"), '带用户文本的到期提醒应按外部事件处理');
+  assert.ok(body.includes('reminderText: r.text'), '提醒正文应放在事件资料字段');
+  assert.ok(!body.includes('定时提醒「${r.text}」'), '提醒正文不得直接拼入事件指令文本');
 });
 
 test('引用图片必须进入当前事件附件或辅助视觉路径', async () => {

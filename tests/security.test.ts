@@ -369,3 +369,15 @@ test('普通文件资料只作为外部资料，并限制下载与发送边界',
   assert.ok(world.includes('upload_file_stream'), '远程协议端发送应先使用流式上传');
   assert.ok(world.includes('upload_group_file') && world.includes('upload_private_file'), '群聊和私聊发送必须分别调用文件上传接口');
 });
+
+test('语音发送必须与引用和 @ 段分开发送', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/world.ts', import.meta.url), 'utf8');
+  const start = src.indexOf('const wantVoice =');
+  const end = src.indexOf('\n    const outgoing = buildOutgoing', start);
+  assert.ok(start > 0 && end > start, '必须存在语音发送分支');
+  const body = src.slice(start, end);
+  assert.ok(body.includes('const segs: Array<Record<string, unknown>> = [rec'), '语音 send_msg 必须只包含 record 段');
+  assert.ok(!body.includes('segs.push({ type: \'reply\''), '语音消息不得拼入 reply 段');
+  assert.ok(!body.includes("segs.push({ type: 'at'"), '语音消息不得拼入 at 段');
+});

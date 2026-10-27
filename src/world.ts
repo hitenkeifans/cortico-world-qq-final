@@ -2017,10 +2017,10 @@ export class QQWorld implements World {
     if (wantVoice) {
       const rec = await synthesizeVoice(text, address, this.driver, this.voiceRuntime(), this.log);
       if (rec) {
-        const segs: Array<Record<string, unknown>> = [];
-        if (replyMessageId != null) segs.push({ type: 'reply', data: { id: replyMessageId } });
-        if (atQQs && atQQs.length) for (const qq of atQQs) segs.push({ type: 'at', data: { qq } });
-        segs.push(rec as unknown as Record<string, unknown>);
+        // QQ/NapCat 对「引用/@ + 语音」组合段的群聊渲染不稳定：手机端可能只显示
+        // 引用头和空白气泡。语音必须单独作为 record 消息发送；引用/@ 仍由文字消息
+        // 路径处理，避免把这三类段拼进同一个 send_msg。
+        const segs: Array<Record<string, unknown>> = [rec as unknown as Record<string, unknown>];
         try {
           const r: any = await this.driver.callApi('send_msg', { ...paramsBase, message: segs });
           this.rememberSentMessage(address, r);

@@ -5,6 +5,7 @@ import test from 'node:test';
 // 认证评审（Pal-AI-Lab/cortico-extensions#104）明确要求修掉，故固化成测试。
 
 import { QQ_DEFAULTS, toIds } from '../src/config.ts';
+import { fetchQqVoiceBytes } from '../src/voice.ts';
 
 test('反向监听默认只绑回环，不对外暴露', () => {
   assert.equal(QQ_DEFAULTS.wsHost, '127.0.0.1', '默认必须是回环地址');
@@ -380,4 +381,24 @@ test('语音发送必须与引用和 @ 段分开发送', async () => {
   assert.ok(body.includes('const segs: Array<Record<string, unknown>> = [rec'), '语音 send_msg 必须只包含 record 段');
   assert.ok(!body.includes('segs.push({ type: \'reply\''), '语音消息不得拼入 reply 段');
   assert.ok(!body.includes("segs.push({ type: 'at'"), '语音消息不得拼入 at 段');
+});
+
+test('腾讯语音下载使用浏览器请求头并拒绝跳转和超大响应', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: RequestInit[] = [];
+  globalThis.fetch = (async (_url: string | URL | Request, init?: RequestInit) => {
+    requests.push(init ?? {});
+    return new Response(Uint8Array.of(1, 2, 3), { status: 200 });
+  }) as typeof fetch;
+  try {
+    assert.deepEqual(await fetchQqVoiceBytes('https://multimedia.nt.qq.com.cn/audio.amr', 1000), Buffer.from([1, 2, 3]));
+    assert.equal(requests[0]?.redirect, 'error');
+    assert.equal((requests[0]?.headers as Record<string, string>)['User-Agent'], 'Mozilla/5.0');
+    assert.equal(await fetchQqVoiceBytes('http://127.0.0.1/audio.amr', 1000), null);
+    assert.equal(requests.length, 1, '非腾讯语音地址不得由下载分支请求');
+    globalThis.fetch = (async () => new Response('', { status: 200, headers: { 'content-length': String(33 * 1024 * 1024) } })) as typeof fetch;
+    assert.equal(await fetchQqVoiceBytes('https://multimedia.nt.qq.com.cn/large.amr', 1000), null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

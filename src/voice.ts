@@ -179,16 +179,41 @@ export function splitIntoSentences(text: string): string[] {
  *  - TTS：POST {baseUrl}/audio/speech（JSON: model + voice + input + 额外参数）
  *  - 与具体厂商无关：OpenAI / GLM / 自建兼容服务只要实现该接口即可。
  * ------------------------------------------------------------------ */
-async function fetchBytes(url: string, timeoutMs: number): Promise<Buffer | null> {
+function isQqVoiceUrl(url: string): boolean {
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(timer);
-    if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    const parsed = new URL(url);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname.toLowerCase() === 'multimedia.nt.qq.com.cn';
+  } catch { return false; }
+}
+
+/** 腾讯语音 CDN 有时拒绝 ffmpeg 的默认请求头；仅对该固定域名先下载，限制大小和重定向。 */
+export async function fetchQqVoiceBytes(url: string, timeoutMs: number): Promise<Buffer | null> {
+  if (!isQqVoiceUrl(url)) return null;
+  const maxBytes = 32 * 1024 * 1024;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), Math.min(timeoutMs, 20_000));
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      redirect: 'error',
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+    });
+    if (!res.ok || !res.body || Number(res.headers.get('content-length') || 0) > maxBytes) return null;
+    const reader = res.body.getReader();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > maxBytes) { await reader.cancel(); return null; }
+      chunks.push(Buffer.from(value));
+    }
+    return size ? Buffer.concat(chunks, size) : null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -376,25 +401,26 @@ let resolvedFfmpeg: string | null = null;
 let ffmpegWarned = false;
 
 /** 用 ffmpeg 把语音 url 解码成 16k 单声道 WAV 字节；无可用 ffmpeg 或失败返回 null（best-effort，不阻塞）。 */
-function decodeToWav(url: string, candidates: string[], timeoutMs: number): Promise<Uint8Array | null> {
-  if (!candidates.length) return Promise.resolve(null);
+async function decodeToWav(url: string, candidates: string[], timeoutMs: number): Promise<Uint8Array | null> {
+  if (!candidates.length) return null;
+  const qqCdn = isQqVoiceUrl(url);
+  const downloaded = qqCdn ? await fetchQqVoiceBytes(url, timeoutMs) : null;
+  if (qqCdn && !downloaded) return null;
   const tryOne = (idx: number): Promise<Uint8Array | null> => {
-    if (idx >= candidates.length) {
-      if (!ffmpegWarned) {
-        ffmpegWarned = true;
-        // 仅记录一次；真正告警在调用方 transcribeViaService 里按 log 输出。
-      }
-      return Promise.resolve(null);
-    }
+    if (idx >= candidates.length) return Promise.resolve(null);
     const bin = resolvedFfmpeg ?? candidates[idx];
     return new Promise((resolve) => {
       let settled = false;
       const fail = () => { if (!settled) { settled = true; void tryOne(idx + 1).then(resolve); } };
       let proc: ReturnType<typeof spawn> | null = null;
       try {
-        proc = spawn(bin, ['-y', '-i', url, '-f', 'wav', '-ac', '1', '-ar', '16000', 'pipe:1'], {
-          stdio: ['ignore', 'pipe', 'ignore'],
+        proc = spawn(bin, ['-y', '-i', downloaded ? 'pipe:0' : url, '-f', 'wav', '-ac', '1', '-ar', '16000', 'pipe:1'], {
+          stdio: [downloaded ? 'pipe' : 'ignore', 'pipe', 'ignore'],
         });
+        if (downloaded) {
+          proc.stdin?.on('error', () => {});
+          proc.stdin?.end(downloaded);
+        }
         const chunks: Buffer[] = [];
         proc.stdout?.on('data', (d) => chunks.push(d as Buffer));
         proc.on('error', fail);
@@ -423,7 +449,10 @@ async function transcribeViaService(ctx: VoiceTranscribeCtx): Promise<string | n
   if (!url) return null;
   const wav = await decodeToWav(url, cfg.ffmpegCandidates, cfg.transcribeTimeout);
   if (!wav) {
-    if (!ffmpegWarned) log.warn('[voice] 语音解码失败：找不到可用的 ffmpeg（可在顶层「语音识别」配置组配置 asr.ffmpegPath），识别服务未调用');
+    if (!ffmpegWarned) {
+      ffmpegWarned = true;
+      log.warn('[voice] 语音解码失败：请检查 ffmpeg 路径、腾讯语音地址是否可下载，以及 asr.ffmpegPath 配置；识别服务未调用');
+    }
     return null;
   }
   const ctrl = new AbortController();

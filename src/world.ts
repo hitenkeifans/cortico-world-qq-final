@@ -2054,14 +2054,20 @@ export class QQWorld implements World {
     }
     let ok = 0;
     let total = 0;
+    let limited = false;
     const ids: string[] = [];
     for (const segs of messages) {
       const valid = segs.filter((s) => !(s.type === 'text' && !((s.data as { text?: string }).text ?? '').trim()));
       if (!valid.length) continue;
+      if (this.checkGroupSpeak(address)) {
+        limited = true;
+        break;
+      }
       total++;
       try {
         const r: any = await this.driver.callApi('send_msg', { ...paramsBase, message: valid });
         ok++;
+        this.recordGroupSpeak(address);
         this.rememberSentMessage(address, r, ids);
       } catch (e) {
         this.log.warn('发送失败', {
@@ -2074,11 +2080,15 @@ export class QQWorld implements World {
       if (this.config.sendIntervalMs > 0) await sleep(this.config.sendIntervalMs);
     }
     if (ok > 0) {
-      this.recordGroupSpeak(address);
       this.recordAntiLoop(address);
       this.dedupSends.set(address, { norm, ts: Date.now() });
     }
     const tail = ids.length ? `（message_id: ${ids.join(', ')}，可用 #编号 引用回复）` : '';
+    if (limited) {
+      if (total === 0) return QQWorld.SEND_BLOCKED + '群聊发言频率已达上限，本次消息未发送。';
+      const result = `向 ${this.convLabel(address)} 成功发送 ${ok}/${total} 段；达到群聊限速后，剩余 ${messages.length - total} 段未发送。${tail}`;
+      return ok === 0 ? QQWorld.SEND_FAILED + result : result;
+    }
     if (ok < total) {
       // 部分/全部失败：返回明确失败标记，便于 qq_send 识别并真实地报告"未发送"（而非误报"已发送"）。
       return QQWorld.SEND_FAILED + `已向 ${this.convLabel(address)} 发送 ${ok}/${total} 段（有 ${total - ok} 段发送失败，可能因 NapCat 断连或图片获取失败）。${tail}`;

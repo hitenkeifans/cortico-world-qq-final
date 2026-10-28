@@ -2493,7 +2493,11 @@ export class QQWorld implements World {
       tags: ['read'],
       barrierAfter: true,
       description:
-        '主动重新看一张刚收到的 QQ 图片（当被动视觉没拿到描述、或你想细看时）。不传 url 则看最近收到的一张；也可传 url 指定任意图片链接。返回图片的文字描述。',
+        '主动用独立的辅助视觉模型（VLM）为一张刚收到的 QQ 图片生成一段文字描述。' +
+        '注意：收到的图片默认已作为附件直达主模型，你本身就能直接看到图，通常不需要调用本工具；' +
+        '本工具仅在「辅助视觉」已开启、且你想得到一段文字重描述时有用。' +
+        '辅助视觉关闭时它会明确告诉你「本工具不可用」——这不代表你「看不见图」，只代表这个重描述工具用不了（图片附件照样在你的上下文里）。' +
+        '不传 url 则看最近收到的一张；也可传 url 指定任意图片链接。',
       parameters: {
         type: 'object',
         properties: {
@@ -2503,7 +2507,17 @@ export class QQWorld implements World {
         required: [],
       },
       handler: async (args) => {
-        if (!this.config.vision.enabled) return '被动视觉未开启（config.vision.enabled=false），无法看图。';
+        if (!this.config.vision.enabled) {
+          // 辅助视觉（VLM）关闭时本工具不可用，但绝不能让 agent 误读成「自己看不见图」：
+          // 图片默认已作为附件直达主模型，agent 直接就能看到。只据实区分两种状态。
+          const delivered = this.config.deliverImageAttachments;
+          return (
+            '辅助视觉（VLM）未开启，本工具无法用独立视觉模型重新描述图片。' +
+            (delivered
+              ? '这不影响你看图：收到的图片已作为附件直接送达主模型，你直接就能看到，无需调用本工具。'
+              : '当前也未把图片作为附件送达主模型，所以此刻确实拿不到图片内容；若需看图，请在控制台开启「图片作为模型附件」或「辅助视觉」。')
+          );
+        }
         let url = typeof args.url === 'string' && args.url.trim() ? args.url.trim() : '';
         if (!url) {
           const idx = typeof args.index === 'number' && Number.isFinite(args.index) ? args.index : this.recentImages.length - 1;

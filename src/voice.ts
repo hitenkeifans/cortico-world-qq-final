@@ -13,7 +13,7 @@
  *    收/发入口（transcribeRecord / synthesizeVoice / checkVoiceDeps）无需改动。
  *  是否发语音由主模型在 qq_send 的 voice 参数中直接决定，不再调用额外的语义判定模型。
  */
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -70,7 +70,7 @@ export interface RecordSeg {
 
 /** 收语音的上下文。 */
 export interface VoiceTranscribeCtx {
-  seg: { type: string; data?: { url?: string } };
+  seg: { type: string; data?: { url?: string; file?: string; file_id?: string } };
   messageId: number | undefined;
   driver: VoiceDriver;
   cfg: RuntimeVoiceCfg;
@@ -440,18 +440,71 @@ async function decodeToWav(url: string, candidates: string[], timeoutMs: number)
   return tryOne(0);
 }
 
+/** QQ 语音段是腾讯私有 SILK 封装（#!SILK_V3 / \x02#!SILK_V3），ffmpeg 直接解不开；
+ *  OneBot 的 get_record 由协议端（NapCat / Lagrange 等）负责转码，成功率更高，故优先尝试。 */
+function isSilkBytes(b: Uint8Array): boolean {
+  if (b.length < 10) return false;
+  const head = String.fromCharCode(b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9]);
+  return head.startsWith('#!SILK') || head.startsWith('\x02#!SILK');
+}
+
+/** 把 get_record 的返回（base64 字符串 / data URI / 本地路径）解成字节；解不出返回 null。 */
+function decodeWavBytes(payload: unknown): Uint8Array | null {
+  if (typeof payload !== 'string' || !payload.trim()) return null;
+  const raw = payload.trim();
+  if (raw.startsWith('base64://')) return Buffer.from(raw.slice('base64://'.length), 'base64');
+  if (raw.startsWith('data:')) {
+    const comma = raw.indexOf(',');
+    return comma >= 0 ? Buffer.from(raw.slice(comma + 1), 'base64') : null;
+  }
+  if (raw.startsWith('file://') || raw.startsWith('/') || /^[A-Za-z]:[\\/]/.test(raw)) {
+    try { return readFileSync(raw.replace(/^file:\/\//, '')); } catch { return null; }
+  }
+  try {
+    const bytes = Buffer.from(raw, 'base64');
+    return bytes.length >= 12 && /^RIFF/.test(bytes.subarray(0, 4).toString('latin1')) ? bytes : null;
+  } catch { return null; }
+}
+
+async function readRecordViaOneBot(ctx: VoiceTranscribeCtx): Promise<Uint8Array | null> {
+  const { seg, messageId, driver, log } = ctx;
+  const data = seg?.data ?? {};
+  const file = (data.file || data.url || '').trim();
+  if (!file && messageId === undefined) return null;
+  const params: Record<string, unknown> = { out_format: 'wav', file };
+  if (data.file_id) params.file_id = data.file_id;
+  else if (messageId !== undefined) params.file_id = String(messageId);
+  try {
+    const r = await driver.callApi<{ file?: string; base64?: string }>('get_record', params);
+    const bytes = decodeWavBytes(r?.base64 ?? r?.file);
+    if (!bytes) return null;
+    if (isSilkBytes(bytes)) {
+      log.warn('[voice] get_record 返回的仍是 SILK，交给 ffmpeg 尝试解码');
+      return null;
+    }
+    return bytes;
+  } catch (e) {
+    log.warn('[voice] get_record 不可用（协议端不支持），回退 ffmpeg 解码', String(e));
+    return null;
+  }
+}
+
 /** 专用识别服务：解码后 POST {url}/asr（audio/wav）→ {text}。一切失败返回 null（best-effort）。 */
 async function transcribeViaService(ctx: VoiceTranscribeCtx): Promise<string | null> {
   const { cfg, seg, log } = ctx;
   const base = (cfg.transcribeUrl || '').trim();
   if (!base) return null;
   const url = seg?.data?.url;
-  if (!url) return null;
-  const wav = await decodeToWav(url, cfg.ffmpegCandidates, cfg.transcribeTimeout);
+  const file = seg?.data?.file;
+  if (!url && !file) return null;
+  // 1) 先让协议端把 SILK 转成 WAV（QQ 原生语音的主路径）。
+  let wav = await readRecordViaOneBot(ctx);
+  // 2) 协议端不支持 get_record（如 QQ 官方机器人 1404）时，回退 ffmpeg 下载解码。
+  if (!wav && url) wav = await decodeToWav(url, cfg.ffmpegCandidates, cfg.transcribeTimeout);
   if (!wav) {
     if (!ffmpegWarned) {
       ffmpegWarned = true;
-      log.warn('[voice] 语音解码失败：请检查 ffmpeg 路径、腾讯语音地址是否可下载，以及 asr.ffmpegPath 配置；识别服务未调用');
+      log.warn('[voice] 语音解码失败：get_record 与 ffmpeg 两条路都不通，请检查协议端是否支持 get_record、asr.ffmpegPath 配置以及腾讯语音地址是否可下载；识别服务未调用');
     }
     return null;
   }

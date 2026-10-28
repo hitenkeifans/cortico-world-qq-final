@@ -2,6 +2,12 @@
 
 本文件记录 cortico-world-qq-final 每个版本的改动，供扩展市场的「更新说明」直接读取。
 
+## 未发布
+
+- 修复 QQ 原生语音（SILK）在 ASR 侧车模式下识别不出、日志只有 `translate_record retcode=1404` 的问题：`transcribeViaService` 现在优先调用协议端 `get_record`（`out_format: 'wav'`）把 SILK 交给 NapCat / Lagrange 转码成 WAV，再送 `{transcribeUrl}/asr`；只有协议端明确不支持 `get_record`（如 QQ 官方机器人返回 1404）时，才回退到原有的「下载 + ffmpeg 解码」路径。
+- 若 `get_record` 返回的仍是 SILK（协议端没有自带 silk 解码），同样自动回退 ffmpeg，不会卡死；解码失败的告警改为同时提示 get_record 与 ffmpeg 两条路。
+- `VoiceTranscribeCtx.seg.data` 补上 `file` / `file_id` 字段类型，便于 `get_record` 用原始文件名或消息 ID 定位语音。
+
 ## 0.6.37
 
 - 修复 `qq_view_image` 在辅助视觉（VLM）关闭时误导 agent 自我否定：旧报错「被动视觉未开启（config.vision.enabled=false），无法看图。」被 agent 读成「自己看不见图」，从而撤回本已正确的图片描述。新回执明确区分「本重描述工具不可用」与「图片已作为附件送达主模型（你直接就能看到）」，并据 `deliverImageAttachments` 给出对应提示。

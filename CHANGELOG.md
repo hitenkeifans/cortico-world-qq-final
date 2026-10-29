@@ -2,6 +2,12 @@
 
 本文件记录 cortico-world-qq-final 每个版本的改动，供扩展市场的「更新说明」直接读取。
 
+## 0.6.39
+
+- 修复「一次只能说一句话」（用户 2026-10-28 反馈：桌宠每次只回一句、要对方回复才能接着说话）。
+  - 根因：`qq_send` 自 0.2.3 起带 `endsTurn:true`（发完即结束本轮，模型无法在同轮补第二条）；而 ENV_PROMPT 从未告诉模型「把整段话写进同一次调用、由插件按句拆条」，模型于是习惯一次只写一句 → 每轮只出一个气泡。按句拆分机制本身没有坏（实例数据证实多段连发正常）。
+  - 修复：`ENV_PROMPT.md` 与 `qq_send` 工具描述明确写入契约——想连说几句就把整段话（哪怕三五句）放进**同一次** `qq_send` 的 text，插件自动按句号/问号/感叹号/换行拆成多条逐条发出；不要一次只发一句，也不要试图连续调用（第一次调用后本轮即结束）。零成本恢复自然的连发多气泡体验。
+
 ## 0.6.38
 
 - 修复控制台告警「未在 describe 中声明的事件：qq.proactive, qq.qzone.post」：代码实际发出了 5 个事件（qq.proactive、qq.qzone.post、qq.qzone.reply、qq.qzone.comment、qq.reminder）但 `src/definition.ts` 的 EVENTS 只声明了 9 个。`describe:extension` 只从 EVENTS 生成 describe.json，故这些事件未被声明、运行时每次 emit 都告警。现已在 EVENTS 补齐这 5 个事件并重新生成 describe.json（events 9→14）。

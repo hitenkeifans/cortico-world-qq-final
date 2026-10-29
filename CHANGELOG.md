@@ -7,6 +7,15 @@
 - 修复 QQ 原生语音（SILK）在 ASR 侧车模式下识别不出、日志只有 `translate_record retcode=1404` 的问题：`transcribeViaService` 现在优先调用协议端 `get_record`（`out_format: 'wav'`）把 SILK 交给 NapCat / Lagrange 转码成 WAV，再送 `{transcribeUrl}/asr`；只有协议端明确不支持 `get_record`（如 QQ 官方机器人返回 1404）时，才回退到原有的「下载 + ffmpeg 解码」路径。
 - 若 `get_record` 返回的仍是 SILK（协议端没有自带 silk 解码），同样自动回退 ffmpeg，不会卡死；解码失败的告警改为同时提示 get_record 与 ffmpeg 两条路。
 - `VoiceTranscribeCtx.seg.data` 补上 `file` / `file_id` 字段类型，便于 `get_record` 用原始文件名或消息 ID 定位语音。
+## 0.6.39
+
+- 修复「一次只能说一句话」（用户 2026-10-28 反馈：桌宠每次只回一句、要对方回复才能接着说话）。
+  - 根因：`qq_send` 自 0.2.3 起带 `endsTurn:true`（发完即结束本轮，模型无法在同轮补第二条）；而 ENV_PROMPT 从未告诉模型「把整段话写进同一次调用、由插件按句拆条」，模型于是习惯一次只写一句 → 每轮只出一个气泡。按句拆分机制本身没有坏（实例数据证实多段连发正常）。
+  - 修复：`ENV_PROMPT.md` 与 `qq_send` 工具描述明确写入契约——想连说几句就把整段话（哪怕三五句）放进**同一次** `qq_send` 的 text，插件自动按句号/问号/感叹号/换行拆成多条逐条发出；不要一次只发一句，也不要试图连续调用（第一次调用后本轮即结束）。零成本恢复自然的连发多气泡体验。
+
+## 0.6.38
+
+- 修复控制台告警「未在 describe 中声明的事件：qq.proactive, qq.qzone.post」：代码实际发出了 5 个事件（qq.proactive、qq.qzone.post、qq.qzone.reply、qq.qzone.comment、qq.reminder）但 `src/definition.ts` 的 EVENTS 只声明了 9 个。`describe:extension` 只从 EVENTS 生成 describe.json，故这些事件未被声明、运行时每次 emit 都告警。现已在 EVENTS 补齐这 5 个事件并重新生成 describe.json（events 9→14）。
 
 ## 0.6.37
 

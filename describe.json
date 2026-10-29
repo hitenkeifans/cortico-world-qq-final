@@ -670,6 +670,41 @@
         "zh": "收到一条合并转发消息。",
         "en": "A merged-forward message arrived."
       }
+    },
+    {
+      "type": "qq.proactive",
+      "description": {
+        "zh": "主动说话调度器唤起的一次主动发言:由 qq_proactive 触发器或定时 routine 发起,进入本轮主动处理。",
+        "en": "A proactive speaking turn raised by the scheduler: fired by qq_proactive trigger or the timed routine, entering this active turn."
+      }
+    },
+    {
+      "type": "qq.qzone.post",
+      "description": {
+        "zh": "发了一条 QQ 空间说说(或带图/带权限的说说)后回执的事件。",
+        "en": "Event returned after posting a QQ Zone shout (optionally with images or visibility rights)."
+      }
+    },
+    {
+      "type": "qq.qzone.reply",
+      "description": {
+        "zh": "回复了一条 QQ 空间评论后回执的事件。",
+        "en": "Event returned after replying to a QQ Zone comment."
+      }
+    },
+    {
+      "type": "qq.qzone.comment",
+      "description": {
+        "zh": "收到一条 QQ 空间评论的通知。",
+        "en": "Notice that a QQ Zone comment was received."
+      }
+    },
+    {
+      "type": "qq.reminder",
+      "description": {
+        "zh": "定时提醒/闹钟到点触发,或记事本项被唤起,进入本轮处理。",
+        "en": "A timed reminder/alarm fired, or a notepad item was raised, entering this turn."
+      }
     }
   ],
   "prompts": [

@@ -2,6 +2,10 @@
 
 本文件记录 cortico-world-qq-final 每个版本的改动，供扩展市场的「更新说明」直接读取。
 
+## 0.6.38
+
+- 修复控制台告警「未在 describe 中声明的事件：qq.proactive, qq.qzone.post」：代码实际发出了 5 个事件（qq.proactive、qq.qzone.post、qq.qzone.reply、qq.qzone.comment、qq.reminder）但 `src/definition.ts` 的 EVENTS 只声明了 9 个。`describe:extension` 只从 EVENTS 生成 describe.json，故这些事件未被声明、运行时每次 emit 都告警。现已在 EVENTS 补齐这 5 个事件并重新生成 describe.json（events 9→14）。
+
 ## 0.6.37
 
 - 修复 `qq_view_image` 在辅助视觉（VLM）关闭时误导 agent 自我否定：旧报错「被动视觉未开启（config.vision.enabled=false），无法看图。」被 agent 读成「自己看不见图」，从而撤回本已正确的图片描述。新回执明确区分「本重描述工具不可用」与「图片已作为附件送达主模型（你直接就能看到）」，并据 `deliverImageAttachments` 给出对应提示。
